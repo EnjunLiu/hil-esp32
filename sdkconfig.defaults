@@ -1,0 +1,12 @@
+# This file was generated using idf.py save-defconfig or menuconfig [D] key. It can be edited manually.
+# Espressif IoT Development Framework (ESP-IDF) 5.5.4 Project Minimal Configuration
+#
+CONFIG_IDF_TARGET="esp32p4"
+CONFIG_MICRO_ROS_ESP_UART_TRANSPORT=y
+CONFIG_MICROROS_UART_TXD=18
+CONFIG_MICROROS_UART_RXD=17
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_PM_SLEEP_FUNC_IN_IRAM=y
+CONFIG_MBEDTLS_CMAC_C=y
+CONFIG_ESP_WIFI_REMOTE_ENABLED=n

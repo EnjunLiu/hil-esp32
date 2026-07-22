@@ -1,0 +1,35 @@
+# ESP-IDF build outputs
+/build/
+/managed_components/
+
+# ESP-IDF local configuration
+/sdkconfig
+/sdkconfig.old
+
+# colcon and micro-ROS generated files
+/install/
+/log/
+.colcon/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Operating system
+.DS_Store
+Thumbs.db
