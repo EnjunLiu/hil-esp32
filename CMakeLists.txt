@@ -8,7 +8,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 set(
     MICRO_ROS_EXTRA_PACKAGES_DIR
-    "${CMAKE_CURRENT_LIST_DIR}/extra_ros_packages"
+    "${CMAKE_CURRENT_LIST_DIR}/micro_ros_packages"
 )
 
 
