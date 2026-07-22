@@ -12,4 +12,4 @@ set(
 )
 
 
-project(ASV)
+project(asv_esp32_firmware)
