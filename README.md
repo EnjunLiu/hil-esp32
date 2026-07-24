@@ -1,21 +1,25 @@
 # ASV Controller Firmware
 
-基于 ESP-IDF 和 micro-ROS 的 ASV 控制器固件。
+基于 ESP-IDF 编译的 ASV 控制器固件。
 
-该固件运行于 ESP32-P4，负责接收决策指令、执行控制算法，并发布控制结果数据。
+## 功能简介
 
-## 功能
+- 接收 ASV 坐标系下的期望位移，输出力和力矩
+- 基于 micro-ROS 实现与上位机通信
 
-- micro-ROS 通信
-- ASV 控制输入与推力指令处理
-- 控制器与状态估计
-- UART 通信支持
-- 自定义 ROS 2 消息接口
+## 实现细节
 
-## 环境要求
+- 预设时间收敛观测器
+- 预设时间收敛导引律
+- LSRL-PID 控制器
 
-- Ubuntu
+## 使用方式
+
+- 加载 esp-idf 环境并编译烧录
+
+## 测试环境
+
+- WSL Ubuntu 26.04
 - ESP-IDF `v5.5.4`
-- Python（由 ESP-IDF 管理）
-- ROS 2 Humble（用于 micro-ROS 接口开发）
-- ESP32-P4 开发板
+- micro-ROS Humble
+- ESP32-P4
