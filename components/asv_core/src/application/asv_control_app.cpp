@@ -87,13 +87,13 @@ bool ASVControlApp::applyParams(const ControllerParamsPlain &params, bool reset_
 
 void ASVControlApp::step()
 {
-    const int64_t now_us = input_.stamp_us;
+    const int64_t now_us = esp_timer_get_time();
 
-    wrench_.seq++;                       // 自增序号，首次调用由 0 → 1
-    wrench_.stamp_us = now_us;
+    wrench_.seq++;
+    wrench_.stamp_us = input_.stamp_us;
 
     debug_.seq      = wrench_.seq;
-    debug_.stamp_us = now_us;
+    debug_.stamp_us = input_.stamp_us;
 
     const bool input_fresh =
         last_control_input_rx_us_ > 0 &&

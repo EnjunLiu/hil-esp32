@@ -19,7 +19,6 @@ extern "C" {
 static const char *TAG = "ASV_MAIN";
 static uart_port_t uart_port = UART_NUM_2;
 
-
 extern "C" void app_main(void)
 {
     ESP_LOGI(
