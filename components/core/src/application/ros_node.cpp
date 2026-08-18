@@ -34,6 +34,7 @@
 
 static const char *UROS_TAG = "MICRO_ROS";
 
+/* 硬检查：如果表达式返回非RCL_RET_OK，则返回错误码 */
 #define RETURN_IF_RCL_ERROR(expression)                                       \
     do {                                                                      \
         const rcl_ret_t rc = (expression);                                    \
@@ -42,6 +43,7 @@ static const char *UROS_TAG = "MICRO_ROS";
         }                                                                     \
     } while (0)
 
+/* 软检查：如果表达式返回非RCL_RET_OK，则记录错误信息并重置错误状态 */
 #define RCSOFTCHECK(expression)                                               \
     do {                                                                      \
         const rcl_ret_t soft_rc = (expression);                               \
@@ -53,11 +55,13 @@ static const char *UROS_TAG = "MICRO_ROS";
         }                                                                     \
     } while (0)
 
+/* 双精度参数结构体，用于存储参数名称和对应的控制器参数结构体字段 */
 struct DoubleParam {
     const char *name;
     float ControllerParamsPlain::*field;
 };
 
+/* 双精度参数数组，用于存储所有可配置的参数 */
 static constexpr DoubleParam kDoubleParams[] = {
     {"time_constant", &ControllerParamsPlain::time_constant},
     {"v_max", &ControllerParamsPlain::v_max},
@@ -132,26 +136,31 @@ static void control_input_callback(const void *msgin)
     g_app.setControlInput(to_plain(*static_cast<const interfaces__msg__ControlInput *>(msgin)));
 }
 
-static bool on_parameter_changed(const Parameter *old_param,
+/* 参数变化回调函数，用于在参数变化时更新控制器参数 */
+static bool on_parameter_changed(const Parameter *,
                                  const Parameter *new_param,
-                                 void *context)
+                                 void *)
 {
-    (void)old_param;
-    (void)context;
+    /* 如果新参数为NULL，则返回true */
     if (new_param == NULL) {
         return true;
     }
+    /* 如果新参数为整数类型且名称为param_version，则返回新参数的整数值是否大于等于0 */
     if (new_param->value.type == RCLC_PARAMETER_INT &&
         std::strcmp(new_param->name.data, "param_version") == 0) {
         return new_param->value.integer_value >= 0;
     }
+    /* 否则返回true */
     return true;
 }
 
+/* 从参数服务器读取参数并更新控制器参数 */
 static void read_params_from_server(ControllerParamsPlain *params)
 {
+    /* 初始化控制器参数结构体 */
     *params = ControllerParamsPlain{};
 
+    /* 获取参数版本 */
     int64_t iver = 0;
     rclc_parameter_get_int(&param_server, "param_version", &iver);
     params->version = (uint32_t)iver;
