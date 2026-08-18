@@ -5,7 +5,6 @@ set(ASV_CORE_SRCS
     "src/control/RLPID_controller.cpp"
     "src/estimator/estimator.cpp"
     "src/iq_math_extension/iq_scalar.cpp"
-    "src/iq_math_extension/iq_matrix3X3.cpp"
 )
 
 idf_component_register(

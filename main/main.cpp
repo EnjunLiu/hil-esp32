@@ -16,7 +16,7 @@ extern "C" {
 #include "application/ros_node.hpp"
 #include "application/asv_control_app.hpp"
 
-static const char *TAG = "ASV_MAIN";
+static const char *TAG = "MAIN";
 static uart_port_t uart_port = UART_NUM_2;
 
 extern "C" void app_main(void)

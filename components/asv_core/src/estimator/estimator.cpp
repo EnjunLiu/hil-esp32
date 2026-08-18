@@ -1,6 +1,5 @@
 #include "estimator/estimator.hpp"
 
-#include "iq_math_extension/iq_matrix3X3.hpp"
 #include "iq_math_extension/iq_vector.hpp"
 #include "iq_math_extension/iq_scalar.hpp"
 

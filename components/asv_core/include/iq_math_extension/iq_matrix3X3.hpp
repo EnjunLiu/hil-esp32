@@ -26,9 +26,6 @@ struct IQMatrix3X3 {
                   m10(_IQ(_m10)), m11(_IQ(_m11)), m12(_IQ(_m12)),
                   m20(_IQ(_m20)), m21(_IQ(_m21)), m22(_IQ(_m22)) {}
 
-    /* 矩阵求逆 */
-    IQMatrix3X3 Invert() const;
-
     _iq at(int x, int y) const {
         return *(&m00 + x * 3 + y);
     }
@@ -37,11 +34,14 @@ struct IQMatrix3X3 {
         return *(&m00 + x * 3 + y);
     }
 
-    /* 矩阵乘法（矩阵 × 矩阵） */
-    IQMatrix3X3 operator*(const IQMatrix3X3& other) const;
-    /* 矩阵乘法（矩阵 × 向量） */
-    IQVector<3> operator*(const IQVector<3>& vec) const;
-    /* 矩阵乘法（矩阵 × 标量） */
-    IQMatrix3X3 operator*(const _iq& scalar) const;
+    IQMatrix3X3 operator*(const _iq& scalar) const {
+        IQMatrix3X3 result;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                result.at(i, j) = _IQmpy(this->at(i, j), scalar);
+            }
+        }
+        return result;
+    }
 
 };
