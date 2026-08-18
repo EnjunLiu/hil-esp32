@@ -3,7 +3,7 @@ dependencies:
     version: '>=4.1.0'
   espressif/iqmath: ^1.11.0
 
-  # For esp32-p4 support, choose humble
+  # For esp32-p4, use humble
   micro_ros_espidf_component: 
     git: https://github.com/micro-ROS/micro_ros_espidf_component.git
     version: humble

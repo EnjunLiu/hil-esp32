@@ -2,7 +2,7 @@
 <package format="3">
   <name>interfaces</name>
   <version>0.0.1</version>
-  <description>ASV custom interfaces for ESP32 micro-ROS controller.</description>
+  <description>Interfaces for ESP32 micro-ROS controller.</description>
   <maintainer email="liuenjun1010@gmail.com">liu</maintainer>
   <license>Apache-2.0</license>
 

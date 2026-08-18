@@ -1,6 +1,6 @@
 #include "iq_math_extension/iq_scalar.hpp"
 
-/* 计算_iq变量勾股斜边长 */
+/* 快速计算_iq类型变量的勾股斜边长 */
 _iq _IQhypot(_iq a, _iq b) {
     return _IQsqrt(_IQmpy(a, a) + _IQmpy(b, b));
 }
@@ -13,11 +13,12 @@ _iq _IQsign(_iq x) {
 }
 
 /* _iq类型变量的xi函数 */
+/* 1.18920712 ≈ 1/sqrt(2) */
 _iq _IQxi(_iq x) {
     return _IQmpy(_IQsqrt(_IQabs(x)) + _IQmpy(_IQ(1.18920712), _IQsqrt(_IQmpy(_IQabs(x), _IQmpy(x, x)))), _IQsign(x));
 }
 
-/* 内部辅助：快速幂，e 保证是正整数 */
+/* 内联快速幂函数实现 */
 static inline _iq _IQpowi_impl(_iq base, int e) {
     _iq result = _IQ(1.0);
     _iq b = base;

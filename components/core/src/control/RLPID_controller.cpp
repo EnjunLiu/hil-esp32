@@ -1,20 +1,8 @@
 #include "control/RLPID_controller.hpp"
 
-RLPIDController::RLPIDController() : Delta_t(_IQ(0.1)), state(), next_state(), Phi(), next_Phi(),
-    mu(_IQ(1.0), _IQ(0.0), _IQ(0.0),
-       _IQ(0.0), _IQ(1.0), _IQ(0.0),
-       _IQ(0.0), _IQ(0.0), _IQ(1.0)),
-    w_V(), w_P(), w_I(), w_D(), R(), u(), gamma(_IQ(0.99)), lambda_rls(_IQ(0.99)),
-    decay(_IQ(0.99)), W_bound(_IQ(5)), I_bound(_IQ(10)), D_bound(_IQ(10)),
-    output_bound(_IQ(10)), P(), I(), D()
-{
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            R.at(i, j) = (i == j) ? _IQ(0.001) : _IQ(0.0);
-        }
-    }
-}
-
+/* 构造函数 
+    可选构造项包括：时间步长、积分限、微分限、输出限
+*/
 RLPIDController::RLPIDController(float _Delta_t, float _I_bound, float _D_bound, float _output_bound)
     : Delta_t(_IQ(_Delta_t)), state(), next_state(), Phi(), next_Phi(),
       mu(_IQ(1.0), _IQ(0.0), _IQ(0.0),

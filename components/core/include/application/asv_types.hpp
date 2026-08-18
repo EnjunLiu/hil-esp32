@@ -43,31 +43,3 @@ struct WrenchPlain {
     float moment = 0.0f;
     bool valid = false;
 };
-
-struct DebugPlain {
-    uint32_t seq = 0;
-    int64_t stamp_us = 0;
-
-    float x_hat = 0.0f;
-    float y_hat = 0.0f;
-    float v_hat_x = 0.0f;
-    float v_hat_y = 0.0f;
-
-    float v_hat = 0.0f;
-    float theta = 0.0f;
-    float e_track_x = 0.0f;
-    float e_track_y = 0.0f;
-    float a = 0.0f;
-    float varepsilon = 0.0f;
-
-    float delta_v = 0.0f;
-    float delta_psi = 0.0f;
-
-    float p_f = 0.0f;
-    float i_f = 0.0f;
-    float d_f = 0.0f;
-
-    float p_m = 0.0f;
-    float i_m = 0.0f;
-    float d_m = 0.0f;
-};

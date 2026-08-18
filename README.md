@@ -13,36 +13,9 @@
 - 预设时间收敛导引律
 - LSRL-PID 控制器
 
-## 项目结构
+## 使用方式
 
-```
-asv-esp32-firmware/
-├── components/core/          # ESP-IDF 固件核心组件
-├── extra_ros_packages/
-│   └── interfaces/           # micro-ROS 自定义消息包
-├── main/                     # 应用入口
-└── app-colcon.meta           # micro-ROS colcon 配置
-```
-
-## 编译
-
-加载 ESP-IDF 环境（推荐使用 `~/idf55_microros_env.sh`，并保持单一 Python 环境）：
-
-```bash
-source ~/idf55_microros_env.sh
-cd ~/asv-esp32-firmware
-pip install -r requirements-microros.txt
-idf.py build
-```
-
-修改 `extra_ros_packages/` 中的消息后，需重新生成 micro-ROS 头文件：
-
-```bash
-idf.py clean-microros
-idf.py build
-```
-
-若出现 Python 环境不一致，执行 `idf.py fullclean` 后重新编译。
+- 加载 esp-idf 环境并编译烧录
 
 ## 测试环境
 

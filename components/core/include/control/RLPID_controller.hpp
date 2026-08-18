@@ -36,7 +36,6 @@ struct RLPIDController {
     _iq I; // PID I参数
     _iq D; // PID D参数
 
-    RLPIDController();
     RLPIDController(float _Delta_t, float _I_bound, float _D_bound, float _output_bound);
 
     /* 更新控制器并计算控制器输出 */

@@ -72,16 +72,6 @@ class IQVector {
         return result;
     }
 
-
-
-    IQVector Hadamard(const IQVector& other) const {
-        IQVector result;
-        for (int i = 0; i < N; i++) {
-            result.data[i] = _IQmpy(data[i], other.data[i]);
-        }
-        return result;
-    }
-    
     _iq norm() const {
         return _IQsqrt((*this)*(*this));
     }

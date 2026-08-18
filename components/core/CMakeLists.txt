@@ -1,4 +1,4 @@
-set(ASV_CORE_SRCS
+set(CORE_SRCS
     "src/application/ros_node.cpp"
     "src/application/asv_control_app.cpp"
     "src/communication/esp32_serial_transport.c"
@@ -8,14 +8,13 @@ set(ASV_CORE_SRCS
 )
 
 idf_component_register(
-    SRCS ${ASV_CORE_SRCS}
+    SRCS ${CORE_SRCS}
     INCLUDE_DIRS "include"
     REQUIRES
         "micro_ros_espidf_component"
         "iqmath"
     PRIV_REQUIRES
         "esp_driver_uart"
-        "esp_driver_gpio"
         "esp_timer"
 )
 

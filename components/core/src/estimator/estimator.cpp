@@ -1,6 +1,4 @@
 #include "estimator/estimator.hpp"
-
-#include "iq_math_extension/iq_vector.hpp"
 #include "iq_math_extension/iq_scalar.hpp"
 
 #define PI 3.14159265
