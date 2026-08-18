@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>asv_interfaces</name>
+  <name>interfaces</name>
   <version>0.0.1</version>
   <description>ASV custom interfaces for ESP32 micro-ROS controller.</description>
   <maintainer email="liuenjun1010@gmail.com">liu</maintainer>

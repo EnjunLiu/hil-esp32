@@ -4,10 +4,6 @@ set(PROJECT_VER "0.1.0")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-set(
-    MICRO_ROS_EXTRA_PACKAGES_DIR
-    "${CMAKE_CURRENT_LIST_DIR}/micro_ros_packages"
-)
-
+# micro-ROS reads custom message packages from extra_ros_packages/.
 
 project(asv_esp32_firmware)
