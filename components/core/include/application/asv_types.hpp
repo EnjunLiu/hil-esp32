@@ -3,8 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-struct ControlInputPlain {
-    uint32_t seq = 0;
+struct InputPlain {
     int64_t stamp_us = 0;
 
     float desired_x = 0.0f;
@@ -16,7 +15,7 @@ struct ControlInputPlain {
     bool valid = false;
 };
 
-struct ControllerParamsPlain {
+struct ParamsPlain {
     uint32_t version = 0;
 
     float time_constant = 10.0f;
@@ -37,7 +36,6 @@ struct ControllerParamsPlain {
 };
 
 struct WrenchPlain {
-    uint32_t seq = 0;
     int64_t stamp_us = 0;
     float force = 0.0f;
     float moment = 0.0f;

@@ -14,7 +14,7 @@ extern "C" {
 }
 
 #include "application/ros_node.hpp"
-#include "application/asv_control_app.hpp"
+#include "application/asv_app.hpp"
 
 static const char *TAG = "MAIN";
 static uart_port_t uart_port = UART_NUM_2;
@@ -32,7 +32,7 @@ extern "C" void app_main(void)
     );
 
     g_app.init();
-    ESP_LOGI(TAG, "ASVControlApp initialized");
+    ESP_LOGI(TAG, "ASVApp initialized");
 
 #if defined(RMW_UXRCE_TRANSPORT_CUSTOM)
     rmw_uros_set_custom_transport(

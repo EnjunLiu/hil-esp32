@@ -1,8 +1,8 @@
 set(CORE_SRCS
     "src/application/ros_node.cpp"
-    "src/application/asv_control_app.cpp"
+    "src/application/asv_app.cpp"
     "src/communication/esp32_serial_transport.c"
-    "src/control/RLPID_controller.cpp"
+    "src/control/controller.cpp"
     "src/estimator/estimator.cpp"
     "src/iq_math_extension/iq_scalar.cpp"
 )

@@ -1,4 +1,3 @@
-uint32 seq
 int64 stamp_us
 
 # 无人船坐标系下的期望二维位移

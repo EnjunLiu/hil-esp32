@@ -1,6 +1,6 @@
 /**
  * @file ros_node.cpp
- * @brief micro-ROS 节点 —— ESP32 ASV 控制器
+ * @brief micro-ROS 节点 —— ESP32 ASV 固件
  */
 
 #include "application/ros_node.hpp"
@@ -22,7 +22,7 @@
 #include <interfaces/msg/asv_wrench.h>
 #include <interfaces/msg/control_input.h>
 
-#include "application/asv_control_app.hpp"
+#include "application/asv_app.hpp"
 
 #ifndef UROS_MINIMAL_NODE_TEST
 #define UROS_MINIMAL_NODE_TEST 0
@@ -34,7 +34,6 @@
 
 static const char *UROS_TAG = "MICRO_ROS";
 
-/* 硬检查：如果表达式返回非RCL_RET_OK，则返回错误码 */
 #define RETURN_IF_RCL_ERROR(expression)                                       \
     do {                                                                      \
         const rcl_ret_t rc = (expression);                                    \
@@ -43,7 +42,6 @@ static const char *UROS_TAG = "MICRO_ROS";
         }                                                                     \
     } while (0)
 
-/* 软检查：如果表达式返回非RCL_RET_OK，则记录错误信息并重置错误状态 */
 #define RCSOFTCHECK(expression)                                               \
     do {                                                                      \
         const rcl_ret_t soft_rc = (expression);                               \
@@ -55,26 +53,24 @@ static const char *UROS_TAG = "MICRO_ROS";
         }                                                                     \
     } while (0)
 
-/* 双精度参数结构体，用于存储参数名称和对应的控制器参数结构体字段 */
-struct DoubleParam {
+struct Param {
     const char *name;
-    float ControllerParamsPlain::*field;
+    float ParamsPlain::*field;
 };
 
-/* 双精度参数数组，用于存储所有可配置的参数 */
-static constexpr DoubleParam kDoubleParams[] = {
-    {"time_constant", &ControllerParamsPlain::time_constant},
-    {"v_max", &ControllerParamsPlain::v_max},
-    {"e_max", &ControllerParamsPlain::e_max},
-    {"delta_t", &ControllerParamsPlain::delta_t},
-    {"gamma_rl", &ControllerParamsPlain::gamma_rl},
-    {"lambda_rls", &ControllerParamsPlain::lambda_rls},
-    {"max_force", &ControllerParamsPlain::max_force},
-    {"max_moment", &ControllerParamsPlain::max_moment},
-    {"i_bound_force", &ControllerParamsPlain::i_bound_force},
-    {"d_bound_force", &ControllerParamsPlain::d_bound_force},
-    {"i_bound_moment", &ControllerParamsPlain::i_bound_moment},
-    {"d_bound_moment", &ControllerParamsPlain::d_bound_moment},
+static constexpr Param kParams[] = {
+    {"time_constant", &ParamsPlain::time_constant},
+    {"v_max", &ParamsPlain::v_max},
+    {"e_max", &ParamsPlain::e_max},
+    {"delta_t", &ParamsPlain::delta_t},
+    {"gamma_rl", &ParamsPlain::gamma_rl},
+    {"lambda_rls", &ParamsPlain::lambda_rls},
+    {"max_force", &ParamsPlain::max_force},
+    {"max_moment", &ParamsPlain::max_moment},
+    {"i_bound_force", &ParamsPlain::i_bound_force},
+    {"d_bound_force", &ParamsPlain::d_bound_force},
+    {"i_bound_moment", &ParamsPlain::i_bound_moment},
+    {"d_bound_moment", &ParamsPlain::d_bound_moment},
 };
 
 static rcl_allocator_t allocator;
@@ -86,11 +82,11 @@ static rclc_parameter_server_t param_server;
 static uint32_t applied_param_version = 0;
 static bool agent_connected = true;
 
-static rcl_subscription_t control_input_sub;
+static rcl_subscription_t input_sub;
 static rcl_publisher_t wrench_pub;
-static rcl_timer_t control_timer;
+static rcl_timer_t step_timer;
 
-static interfaces__msg__ControlInput control_input_msg;
+static interfaces__msg__ControlInput input_msg;
 static interfaces__msg__ASVWrench wrench_msg;
 
 static void stop_after_rcl_error(const char *stage, rcl_ret_t rc)
@@ -114,66 +110,58 @@ static void stop_after_rcl_error(const char *stage, rcl_ret_t rc)
         ESP_LOGI(UROS_TAG, "SUCCESS: %s", stage);                             \
     } while (0)
 
-static ControlInputPlain to_plain(const interfaces__msg__ControlInput &msg)
+static InputPlain to_plain(const interfaces__msg__ControlInput &msg)
 {
     return {
-        msg.seq, msg.stamp_us, msg.desired_x, msg.desired_y,
+        msg.stamp_us, msg.desired_x, msg.desired_y,
         msg.surge_velocity, msg.yaw_rate, msg.valid
     };
 }
 
 static void fill_wrench_msg(const WrenchPlain &wrench)
 {
-    wrench_msg.seq = wrench.seq;
     wrench_msg.stamp_us = wrench.stamp_us;
     wrench_msg.force = wrench.force;
     wrench_msg.moment = wrench.moment;
     wrench_msg.valid = wrench.valid;
 }
 
-static void control_input_callback(const void *msgin)
+static void input_callback(const void *msgin)
 {
-    g_app.setControlInput(to_plain(*static_cast<const interfaces__msg__ControlInput *>(msgin)));
+    g_app.setInput(to_plain(*static_cast<const interfaces__msg__ControlInput *>(msgin)));
 }
 
-/* 参数变化回调函数，用于在参数变化时更新控制器参数 */
 static bool on_parameter_changed(const Parameter *,
                                  const Parameter *new_param,
                                  void *)
 {
-    /* 如果新参数为NULL，则返回true */
     if (new_param == NULL) {
         return true;
     }
-    /* 如果新参数为整数类型且名称为param_version，则返回新参数的整数值是否大于等于0 */
     if (new_param->value.type == RCLC_PARAMETER_INT &&
         std::strcmp(new_param->name.data, "param_version") == 0) {
         return new_param->value.integer_value >= 0;
     }
-    /* 否则返回true */
     return true;
 }
 
-/* 从参数服务器读取参数并更新控制器参数 */
-static void read_params_from_server(ControllerParamsPlain *params)
+static void read_params_from_server(ParamsPlain *params)
 {
-    /* 初始化控制器参数结构体 */
-    *params = ControllerParamsPlain{};
+    *params = ParamsPlain{};
 
-    /* 获取参数版本 */
     int64_t iver = 0;
     rclc_parameter_get_int(&param_server, "param_version", &iver);
     params->version = (uint32_t)iver;
 
     double d;
-    for (const auto &p : kDoubleParams) {
+    for (const auto &p : kParams) {
         if (rclc_parameter_get_double(&param_server, p.name, &d) == RCL_RET_OK) {
             params->*(p.field) = (float)d;
         }
     }
 }
 
-static void control_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
+static void step_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
     (void)last_call_time;
     if (timer == NULL) {
@@ -184,44 +172,42 @@ static void control_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     rclc_parameter_get_int(&param_server, "param_version", &param_version);
 
     if ((uint32_t)param_version != applied_param_version) {
-        ControllerParamsPlain params;
+        ParamsPlain params;
         read_params_from_server(&params);
         if (g_app.applyParams(params, false)) {
             applied_param_version = (uint32_t)param_version;
         }
     }
 
-    bool reset_ctrl = false;
-    rclc_parameter_get_bool(&param_server, "reset_controller", &reset_ctrl);
-    if (reset_ctrl) {
-        g_app.resetController();
-        rclc_parameter_set_bool(&param_server, "reset_controller", false);
+    bool reset_state = false;
+    rclc_parameter_get_bool(&param_server, "reset_state", &reset_state);
+    if (reset_state) {
+        g_app.resetState();
+        rclc_parameter_set_bool(&param_server, "reset_state", false);
     }
 
-    g_app.step();
-
-    fill_wrench_msg(g_app.getWrench());
+    fill_wrench_msg(g_app.step());
     RCSOFTCHECK(rcl_publish(&wrench_pub, &wrench_msg, NULL));
 }
 
-static rcl_ret_t declare_controller_params()
+static rcl_ret_t declare_params()
 {
-    for (const auto &p : kDoubleParams) {
+    for (const auto &p : kParams) {
         RETURN_IF_RCL_ERROR(rclc_add_parameter(&param_server, p.name, RCLC_PARAMETER_DOUBLE));
     }
     RETURN_IF_RCL_ERROR(rclc_add_parameter(&param_server, "param_version", RCLC_PARAMETER_INT));
-    RETURN_IF_RCL_ERROR(rclc_add_parameter(&param_server, "reset_controller", RCLC_PARAMETER_BOOL));
+    RETURN_IF_RCL_ERROR(rclc_add_parameter(&param_server, "reset_state", RCLC_PARAMETER_BOOL));
     return RCL_RET_OK;
 }
 
-static rcl_ret_t set_default_controller_params()
+static rcl_ret_t set_default_params()
 {
-    const ControllerParamsPlain defaults{};
-    for (const auto &p : kDoubleParams) {
+    const ParamsPlain defaults{};
+    for (const auto &p : kParams) {
         RETURN_IF_RCL_ERROR(rclc_parameter_set_double(&param_server, p.name, defaults.*(p.field)));
     }
     RETURN_IF_RCL_ERROR(rclc_parameter_set_int(&param_server, "param_version", (int64_t)defaults.version));
-    RETURN_IF_RCL_ERROR(rclc_parameter_set_bool(&param_server, "reset_controller", false));
+    RETURN_IF_RCL_ERROR(rclc_parameter_set_bool(&param_server, "reset_state", false));
     return RCL_RET_OK;
 }
 
@@ -230,7 +216,7 @@ static void reset_agent_session(const char *reason)
     ESP_LOGW(UROS_TAG, "agent session reset: %s", reason);
     applied_param_version = 0;
     g_app.init();
-    RCSOFTCHECK(set_default_controller_params());
+    RCSOFTCHECK(set_default_params());
 }
 
 extern "C" void esp_ros_task(void *arg)
@@ -267,9 +253,9 @@ extern "C" void esp_ros_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 #else
-    RCCHECK_STAGE("control_input subscription",
+    RCCHECK_STAGE("input subscription",
                   rclc_subscription_init_default(
-                      &control_input_sub, &node,
+                      &input_sub, &node,
                       ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, ControlInput),
                       "/control/control_input"));
     RCCHECK_STAGE("wrench publisher",
@@ -287,25 +273,25 @@ extern "C" void esp_ros_task(void *arg)
 
     RCCHECK_STAGE("parameter server init",
                   rclc_parameter_server_init_with_option(&param_server, &node, &parameter_options));
-    RCCHECK_STAGE("declare controller parameters", declare_controller_params());
-    RCCHECK_STAGE("set controller parameter defaults", set_default_controller_params());
+    RCCHECK_STAGE("declare parameters", declare_params());
+    RCCHECK_STAGE("set parameter defaults", set_default_params());
 
     const unsigned int timer_timeout_ms = 100;
-    RCCHECK_STAGE("control timer init",
+    RCCHECK_STAGE("step timer init",
                   rclc_timer_init_default(
-                      &control_timer, &support, RCL_MS_TO_NS(timer_timeout_ms), control_timer_callback));
+                      &step_timer, &support, RCL_MS_TO_NS(timer_timeout_ms), step_timer_callback));
 
     const size_t executor_handles = RCLC_EXECUTOR_PARAMETER_SERVER_HANDLES + 2;
     RCCHECK_STAGE("executor init",
                   rclc_executor_init(&executor, &support.context, executor_handles, &allocator));
-    RCCHECK_STAGE("executor add control_input subscription",
+    RCCHECK_STAGE("executor add input subscription",
                   rclc_executor_add_subscription(
-                      &executor, &control_input_sub, &control_input_msg,
-                      &control_input_callback, ON_NEW_DATA));
+                      &executor, &input_sub, &input_msg,
+                      &input_callback, ON_NEW_DATA));
     RCCHECK_STAGE("executor add parameter server",
                   rclc_executor_add_parameter_server(&executor, &param_server, on_parameter_changed));
-    RCCHECK_STAGE("executor add control timer",
-                  rclc_executor_add_timer(&executor, &control_timer));
+    RCCHECK_STAGE("executor add step timer",
+                  rclc_executor_add_timer(&executor, &step_timer));
 
     ESP_LOGI(UROS_TAG, "FULL NODE READY: /esp32_node");
     ESP_LOGI(UROS_TAG, "topics: /control/control_input, /control/asv_wrench");
