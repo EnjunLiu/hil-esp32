@@ -19,8 +19,8 @@
 #include <rclc/executor.h>
 #include <rclc_parameter/rclc_parameter.h>
 
-#include <interfaces/msg/asv_wrench.h>
-#include <interfaces/msg/control_input.h>
+#include <interfaces/msg/output.h>
+#include <interfaces/msg/input.h>
 
 #include "application/asv_app.hpp"
 
@@ -55,22 +55,28 @@ static const char *UROS_TAG = "MICRO_ROS";
 
 struct Param {
     const char *name;
-    float ParamsPlain::*field;
+    float Params::*field;
 };
 
 static constexpr Param kParams[] = {
-    {"time_constant", &ParamsPlain::time_constant},
-    {"v_max", &ParamsPlain::v_max},
-    {"e_max", &ParamsPlain::e_max},
-    {"delta_t", &ParamsPlain::delta_t},
-    {"gamma_rl", &ParamsPlain::gamma_rl},
-    {"lambda_rls", &ParamsPlain::lambda_rls},
-    {"max_force", &ParamsPlain::max_force},
-    {"max_moment", &ParamsPlain::max_moment},
-    {"i_bound_force", &ParamsPlain::i_bound_force},
-    {"d_bound_force", &ParamsPlain::d_bound_force},
-    {"i_bound_moment", &ParamsPlain::i_bound_moment},
-    {"d_bound_moment", &ParamsPlain::d_bound_moment},
+    {"time_constant", &Params::time_constant},
+    {"v_max", &Params::v_max},
+    {"e_max", &Params::e_max},
+    {"delta_t", &Params::delta_t},
+    {"gamma_rl", &Params::gamma_rl},
+    {"lambda_rls", &Params::lambda_rls},
+    {"decay_force", &Params::decay_force},
+    {"decay_moment", &Params::decay_moment},
+    {"w_bound", &Params::w_bound},
+    {"pid_gain_max", &Params::pid_gain_max},
+    {"pid_gain_min", &Params::pid_gain_min},
+    {"max_force", &Params::max_force},
+    {"max_moment", &Params::max_moment},
+    {"i_bound_force", &Params::i_bound_force},
+    {"d_bound_force", &Params::d_bound_force},
+    {"i_bound_moment", &Params::i_bound_moment},
+    {"d_bound_moment", &Params::d_bound_moment},
+    {"input_timeout_s", &Params::input_timeout_s},
 };
 
 static rcl_allocator_t allocator;
@@ -83,11 +89,11 @@ static uint32_t applied_param_version = 0;
 static bool agent_connected = true;
 
 static rcl_subscription_t input_sub;
-static rcl_publisher_t wrench_pub;
+static rcl_publisher_t output_pub;
 static rcl_timer_t step_timer;
 
-static interfaces__msg__ControlInput input_msg;
-static interfaces__msg__ASVWrench wrench_msg;
+static interfaces__msg__Input input_msg;
+static interfaces__msg__Output output_msg;
 
 static void stop_after_rcl_error(const char *stage, rcl_ret_t rc)
 {
@@ -110,7 +116,7 @@ static void stop_after_rcl_error(const char *stage, rcl_ret_t rc)
         ESP_LOGI(UROS_TAG, "SUCCESS: %s", stage);                             \
     } while (0)
 
-static InputPlain to_plain(const interfaces__msg__ControlInput &msg)
+static Input toInput(const interfaces__msg__Input &msg)
 {
     return {
         msg.stamp_us, msg.desired_x, msg.desired_y,
@@ -118,17 +124,17 @@ static InputPlain to_plain(const interfaces__msg__ControlInput &msg)
     };
 }
 
-static void fill_wrench_msg(const WrenchPlain &wrench)
+static void fill_output_msg(const Output &output)
 {
-    wrench_msg.stamp_us = wrench.stamp_us;
-    wrench_msg.force = wrench.force;
-    wrench_msg.moment = wrench.moment;
-    wrench_msg.valid = wrench.valid;
+    output_msg.stamp_us = output.stamp_us;
+    output_msg.force = output.force;
+    output_msg.moment = output.moment;
+    output_msg.valid = output.valid;
 }
 
 static void input_callback(const void *msgin)
 {
-    g_app.setInput(to_plain(*static_cast<const interfaces__msg__ControlInput *>(msgin)));
+    g_app.setInput(toInput(*static_cast<const interfaces__msg__Input *>(msgin)));
 }
 
 static bool on_parameter_changed(const Parameter *,
@@ -145,9 +151,9 @@ static bool on_parameter_changed(const Parameter *,
     return true;
 }
 
-static void read_params_from_server(ParamsPlain *params)
+static void read_params_from_server(Params *params)
 {
-    *params = ParamsPlain{};
+    *params = Params{};
 
     int64_t iver = 0;
     rclc_parameter_get_int(&param_server, "param_version", &iver);
@@ -172,7 +178,7 @@ static void step_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     rclc_parameter_get_int(&param_server, "param_version", &param_version);
 
     if ((uint32_t)param_version != applied_param_version) {
-        ParamsPlain params;
+        Params params;
         read_params_from_server(&params);
         if (g_app.applyParams(params, false)) {
             applied_param_version = (uint32_t)param_version;
@@ -186,8 +192,8 @@ static void step_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
         rclc_parameter_set_bool(&param_server, "reset_state", false);
     }
 
-    fill_wrench_msg(g_app.step());
-    RCSOFTCHECK(rcl_publish(&wrench_pub, &wrench_msg, NULL));
+    fill_output_msg(g_app.step());
+    RCSOFTCHECK(rcl_publish(&output_pub, &output_msg, NULL));
 }
 
 static rcl_ret_t declare_params()
@@ -202,7 +208,7 @@ static rcl_ret_t declare_params()
 
 static rcl_ret_t set_default_params()
 {
-    const ParamsPlain defaults{};
+    const Params defaults{};
     for (const auto &p : kParams) {
         RETURN_IF_RCL_ERROR(rclc_parameter_set_double(&param_server, p.name, defaults.*(p.field)));
     }
@@ -256,17 +262,17 @@ extern "C" void esp_ros_task(void *arg)
     RCCHECK_STAGE("input subscription",
                   rclc_subscription_init_default(
                       &input_sub, &node,
-                      ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, ControlInput),
-                      "/control/control_input"));
-    RCCHECK_STAGE("wrench publisher",
+                      ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, Input),
+                      "/control/input"));
+    RCCHECK_STAGE("output publisher",
                   rclc_publisher_init_default(
-                      &wrench_pub, &node,
-                      ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, ASVWrench),
-                      "/control/asv_wrench"));
+                      &output_pub, &node,
+                      ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, Output),
+                      "/control/output"));
 
     const rclc_parameter_options_t parameter_options = {
         .notify_changed_over_dds = true,
-        .max_params = 16,
+        .max_params = 20,
         .allow_undeclared_parameters = false,
         .low_mem_mode = false,
     };
@@ -294,7 +300,7 @@ extern "C" void esp_ros_task(void *arg)
                   rclc_executor_add_timer(&executor, &step_timer));
 
     ESP_LOGI(UROS_TAG, "FULL NODE READY: /esp32_node");
-    ESP_LOGI(UROS_TAG, "topics: /control/control_input, /control/asv_wrench");
+    ESP_LOGI(UROS_TAG, "topics: /control/input, /control/output");
 
     uint32_t spin_error_count = 0;
     uint32_t ping_ticks = 0;

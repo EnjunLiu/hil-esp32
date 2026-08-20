@@ -1,22 +1,53 @@
 #include "control/controller.hpp"
 
-/* 构造函数 
-    可选构造项包括：时间步长、积分限、微分限、输出限
-*/
-Controller::Controller(float _Delta_t, float _I_bound, float _D_bound, float _output_bound)
-    : Delta_t(_IQ(_Delta_t)), state(), next_state(), Phi(), next_Phi(),
-      mu(_IQ(1.0), _IQ(0.0), _IQ(0.0),
-         _IQ(0.0), _IQ(1.0), _IQ(0.0),
-         _IQ(0.0), _IQ(0.0), _IQ(1.0)),
-      w_V(), w_P(), w_I(), w_D(), R(), u(), gamma(_IQ(0.99)), lambda_rls(_IQ(0.99)),
-      decay(_IQ(0.99)), W_bound(_IQ(5)), I_bound(_IQ(_I_bound)), D_bound(_IQ(_D_bound)),
-      output_bound(_IQ(_output_bound)), P(), I(), D()
+namespace {
+
+void init_r_matrix(IQMatrix3X3 &R)
 {
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
             R.at(i, j) = (i == j) ? _IQ(0.001) : _IQ(0);
         }
     }
+}
+
+} // namespace
+
+Controller::Controller()
+    : Delta_t(_IQ(0)), state(), next_state(), Phi(), next_Phi(),
+      mu(_IQ(1.0), _IQ(0.0), _IQ(0.0),
+         _IQ(0.0), _IQ(1.0), _IQ(0.0),
+         _IQ(0.0), _IQ(0.0), _IQ(1.0)),
+      w_V(), w_P(), w_I(), w_D(), R(), u(),
+      gamma(_IQ(0)), lambda_rls(_IQ(0)), decay(_IQ(0)),
+      W_bound(_IQ(0)), I_bound(_IQ(0)), D_bound(_IQ(0)), output_bound(_IQ(0)),
+      P(), I(), D(), pid_gain_max(_IQ(0)), pid_gain_min(_IQ(0))
+{
+    init_r_matrix(R);
+}
+
+void Controller::configure(float delta_t, float gamma_rl, float lambda_rls, float decay,
+                           float i_bound, float d_bound, float output_bound,
+                           float w_bound, float pid_gain_max, float pid_gain_min)
+{
+    Delta_t = _IQ(delta_t);
+    gamma = _IQ(gamma_rl);
+    lambda_rls = _IQ(lambda_rls);
+    decay = _IQ(decay);
+    I_bound = _IQ(i_bound);
+    D_bound = _IQ(d_bound);
+    output_bound = _IQ(output_bound);
+    W_bound = _IQ(w_bound);
+    this->pid_gain_max = _IQ(pid_gain_max);
+    this->pid_gain_min = _IQ(pid_gain_min);
+}
+
+void Controller::resetAdaptiveState()
+{
+    state = next_state = Phi = next_Phi = {};
+    w_V = w_P = w_I = w_D = u = {};
+    P = I = D = _IQ(0);
+    init_r_matrix(R);
 }
 
 /* 计算控制器输出 */
@@ -99,9 +130,9 @@ _iq Controller::output(const _iq& new_error, const _iq& gradsign) {
     }
 
     // ---------- 计算 PID 参数 ----------
-    P = _IQsat(w_P * Phi, _IQ(100.0), _IQ(0.01));
-    I = _IQsat(w_I * Phi, _IQ(100.0), _IQ(0.01));
-    D = _IQsat(w_D * Phi, _IQ(100.0), _IQ(0.01));
+    P = _IQsat(w_P * Phi, pid_gain_max, pid_gain_min);
+    I = _IQsat(w_I * Phi, pid_gain_max, pid_gain_min);
+    D = _IQsat(w_D * Phi, pid_gain_max, pid_gain_min);
 
     return _IQsat(_IQmpy(P, state[0]) + _IQmpy(I, state[1]) + _IQmpy(D, state[2]), output_bound, -output_bound);
 }

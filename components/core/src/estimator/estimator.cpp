@@ -3,7 +3,23 @@
 
 #define PI 3.14159265
 
-/* 观测器状态更新 */
+Observer::Observer()
+    : T(_IQ(0)), v_max(_IQ(0)), e_max(_IQ(0)), Delta_t(_IQ(0)),
+      state(_IQ(0)), state_hat(_IQ(0)), v_state_hat(_IQ(0)) {}
+
+void Observer::configure(float time_constant, float v_max, float e_max, float delta_t)
+{
+    T = _IQ(time_constant);
+    this->v_max = _IQ(v_max);
+    e_max = _IQ(e_max);
+    Delta_t = _IQ(delta_t);
+}
+
+void Observer::resetState()
+{
+    state = state_hat = v_state_hat = _IQ(0);
+}
+
 void Observer::update(const _iq new_state) {
     state = new_state;
     _iq e_state = state - state_hat;
@@ -16,7 +32,23 @@ void Observer::update(const _iq new_state) {
     state_hat = state_hat + _IQmpy(Delta_t, v_state_hat);
 }
 
-/* 导引律状态更新 */
+GuidanceLaw::GuidanceLaw()
+    : T(_IQ(0)), theta(_IQ(0)), A(_IQ(0)),
+      e_track_x(_IQ(0)), e_track_y(_IQ(0)), varepsilon(_IQ(0)), Delta_t(_IQ(0)),
+      desired_velocity(_IQ(0)), desired_angle(_IQ(0)) {}
+
+void GuidanceLaw::configure(float time_constant, float delta_t)
+{
+    T = _IQ(time_constant);
+    Delta_t = _IQ(delta_t);
+}
+
+void GuidanceLaw::resetState()
+{
+    theta = A = e_track_x = e_track_y = varepsilon = _IQ(0);
+    desired_velocity = desired_angle = _IQ(0);
+}
+
 void GuidanceLaw::update(_iq v_hat_x, _iq v_hat_y, _iq x_hat, _iq y_hat) {
     _iq v_hat = _IQhypot(v_hat_x, v_hat_y);
     theta = _IQatan2(v_hat_y, v_hat_x);

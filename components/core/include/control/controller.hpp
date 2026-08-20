@@ -36,7 +36,14 @@ struct Controller {
     _iq I; // PID I参数
     _iq D; // PID D参数
 
-    Controller(float _Delta_t, float _I_bound, float _D_bound, float _output_bound);
+    _iq pid_gain_max;
+    _iq pid_gain_min;
+
+    Controller();
+    void configure(float delta_t, float gamma_rl, float lambda_rls, float decay,
+                   float i_bound, float d_bound, float output_bound,
+                   float w_bound, float pid_gain_max, float pid_gain_min);
+    void resetAdaptiveState();
 
     /* 更新控制器并计算控制器输出 */
     _iq output(const _iq& new_error, const _iq& gradsign);

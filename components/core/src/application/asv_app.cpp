@@ -4,44 +4,36 @@
 ASVApp g_app;
 
 ASVApp::ASVApp()
-    : params_{}
-    , observer_x_(params_.time_constant, params_.v_max, params_.e_max, params_.delta_t)
-    , observer_y_(params_.time_constant, params_.v_max, params_.e_max, params_.delta_t)
-    , guidancelaw_(params_.time_constant, params_.delta_t)
-    , controller_v_(params_.delta_t, params_.i_bound_force, params_.d_bound_force, params_.max_force)
-    , controller_psi_(params_.delta_t, params_.i_bound_moment, params_.d_bound_moment, params_.max_moment) {}
+    : guidancelaw_()
+    , controller_v_()
+    , controller_psi_() {}
 
 void ASVApp::init()
 {
-    input_ = InputPlain{};
+    input_ = Input{};
     force_ = 0.0f;
     moment_ = 0.0f;
 
     last_input_rx_us_ = 0;
-    input_unavailable_ = true;
-    last_param_version_ = 0;
+    input_active_ = false;
 
-    params_ = ParamsPlain{};
-    observer_x_ = Observer(params_.time_constant, params_.v_max, params_.e_max, params_.delta_t);
-    observer_y_ = Observer(params_.time_constant, params_.v_max, params_.e_max, params_.delta_t);
-    guidancelaw_ = GuidanceLaw(params_.time_constant, params_.delta_t);
+    params_ = Params{};
     resetState_();
 }
 
-void ASVApp::setInput(const InputPlain &input)
+void ASVApp::setInput(const Input &input)
 {
     input_ = input;
     last_input_rx_us_ = esp_timer_get_time();
 }
 
-bool ASVApp::applyParams(const ParamsPlain &params, bool reset_state)
+bool ASVApp::applyParams(const Params &params, bool reset_state)
 {
-    if (params.version <= last_param_version_ || !validateParams_(params)) {
+    if (params.version <= params_.version || !validateParams_(params)) {
         return false;
     }
 
     params_ = params;
-    last_param_version_ = params.version;
     syncSubObjectParams_();
 
     if (reset_state) {
@@ -51,39 +43,26 @@ bool ASVApp::applyParams(const ParamsPlain &params, bool reset_state)
     return true;
 }
 
-WrenchPlain ASVApp::step()
+Output ASVApp::step()
 {
     const int64_t now_us = esp_timer_get_time();
 
-    WrenchPlain wrench;
-    wrench.stamp_us = input_.stamp_us;
-
-    const bool input_fresh =
-        last_input_rx_us_ > 0 &&
-        now_us >= last_input_rx_us_ &&
-        (now_us - last_input_rx_us_) <= kInputTimeoutUs;
-
-    if (!input_.valid || !input_fresh) {
-        force_ = 0.0f;
-        moment_ = 0.0f;
-        wrench.force = force_;
-        wrench.moment = moment_;
-        wrench.valid = false;
-
-        if (!input_unavailable_) {
+    if (!inputActive_(now_us)) {
+        if (input_active_) {
             resetState_();
         }
-
-        input_unavailable_ = true;
-        return wrench;
+        input_active_ = false;
+        return Output{ input_.stamp_us, 0.0f, 0.0f, false };
     }
 
-    input_unavailable_ = false;
+    input_active_ = true;
 
-    observer_x_.update(_IQ(input_.desired_x));
-    observer_y_.update(_IQ(input_.desired_y));
-    guidancelaw_.update(observer_x_.v_state_hat, observer_y_.v_state_hat,
-                        observer_x_.state_hat, observer_y_.state_hat);
+    const float desired[ASV_OBSERVER_COUNT] = { input_.desired_x, input_.desired_y };
+    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
+        observers_[i].update(_IQ(desired[i]));
+    }
+    guidancelaw_.update(observers_[ASV_OBSERVER_X].v_state_hat, observers_[ASV_OBSERVER_Y].v_state_hat,
+                        observers_[ASV_OBSERVER_X].state_hat, observers_[ASV_OBSERVER_Y].state_hat);
 
     const _iq surge_velocity_iq = _IQ(input_.surge_velocity);
     const _iq yaw_rate_iq = _IQ(input_.yaw_rate);
@@ -99,10 +78,15 @@ WrenchPlain ASVApp::step()
 
     force_ = _IQtoF(force_iq);
     moment_ = _IQtoF(moment_iq);
-    wrench.force = force_;
-    wrench.moment = moment_;
-    wrench.valid = true;
-    return wrench;
+    return Output{ input_.stamp_us, force_, moment_, true };
+}
+
+bool ASVApp::inputActive_(int64_t now_us) const
+{
+    const int64_t timeout_us = (int64_t)(params_.input_timeout_s * 1000000.0f);
+    return input_.valid &&
+           last_input_rx_us_ != 0 &&
+           (now_us - last_input_rx_us_) <= timeout_us;
 }
 
 void ASVApp::resetState()
@@ -110,46 +94,33 @@ void ASVApp::resetState()
     resetState_();
 }
 
-void ASVApp::syncObserver_(Observer &obs, const ParamsPlain &params)
-{
-    obs.T = _IQ(params.time_constant);
-    obs.v_max = _IQ(params.v_max);
-    obs.e_max = _IQ(params.e_max);
-    obs.Delta_t = _IQ(params.delta_t);
-}
-
-void ASVApp::syncController_(Controller &ctrl, const ParamsPlain &params,
-                             float decay, float i_bound, float d_bound, float output_bound)
-{
-    ctrl.Delta_t = _IQ(params.delta_t);
-    ctrl.gamma = _IQ(params.gamma_rl);
-    ctrl.lambda_rls = _IQ(params.lambda_rls);
-    ctrl.decay = _IQ(decay);
-    ctrl.I_bound = _IQ(i_bound);
-    ctrl.D_bound = _IQ(d_bound);
-    ctrl.output_bound = _IQ(output_bound);
-}
-
 void ASVApp::syncSubObjectParams_()
 {
-    syncObserver_(observer_x_, params_);
-    syncObserver_(observer_y_, params_);
+    const Params &p = params_;
 
-    guidancelaw_.T = _IQ(params_.time_constant);
-    guidancelaw_.Delta_t = _IQ(params_.delta_t);
+    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
+        observers_[i].configure(p.time_constant, p.v_max, p.e_max, p.delta_t);
+    }
+    guidancelaw_.configure(p.time_constant, p.delta_t);
 
-    syncController_(controller_v_, params_, 0.999f,
-                    params_.i_bound_force, params_.d_bound_force, params_.max_force);
-    syncController_(controller_psi_, params_, 0.99f,
-                    params_.i_bound_moment, params_.d_bound_moment, params_.max_moment);
+    controller_v_.configure(
+        p.delta_t, p.gamma_rl, p.lambda_rls, p.decay_force,
+        p.i_bound_force, p.d_bound_force, p.max_force,
+        p.w_bound, p.pid_gain_max, p.pid_gain_min);
+    controller_psi_.configure(
+        p.delta_t, p.gamma_rl, p.lambda_rls, p.decay_moment,
+        p.i_bound_moment, p.d_bound_moment, p.max_moment,
+        p.w_bound, p.pid_gain_max, p.pid_gain_min);
 }
 
 void ASVApp::resetState_()
 {
-    controller_v_ = Controller(
-        params_.delta_t, params_.i_bound_force, params_.d_bound_force, params_.max_force);
-    controller_psi_ = Controller(
-        params_.delta_t, params_.i_bound_moment, params_.d_bound_moment, params_.max_moment);
+    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
+        observers_[i].resetState();
+    }
+    guidancelaw_.resetState();
+    controller_v_.resetAdaptiveState();
+    controller_psi_.resetAdaptiveState();
 
     force_ = 0.0f;
     moment_ = 0.0f;
@@ -157,7 +128,7 @@ void ASVApp::resetState_()
     syncSubObjectParams_();
 }
 
-bool ASVApp::validateParams_(const ParamsPlain &params) const
+bool ASVApp::validateParams_(const Params &params) const
 {
     if (params.time_constant <= 0.001f || params.time_constant > 100.0f) return false;
     if (params.v_max < 0.0f || params.v_max > 100.0f) return false;
@@ -165,11 +136,18 @@ bool ASVApp::validateParams_(const ParamsPlain &params) const
     if (params.delta_t < 0.001f || params.delta_t > 1.0f) return false;
     if (params.gamma_rl < 0.0f || params.gamma_rl > 1.0f) return false;
     if (params.lambda_rls < 0.0f || params.lambda_rls > 1.0f) return false;
+    if (params.decay_force < 0.0f || params.decay_force > 1.0f) return false;
+    if (params.decay_moment < 0.0f || params.decay_moment > 1.0f) return false;
+    if (params.w_bound <= 0.0f || params.w_bound > 1000.0f) return false;
+    if (params.pid_gain_max <= params.pid_gain_min) return false;
+    if (params.pid_gain_max > 10000.0f) return false;
+    if (params.pid_gain_min <= 0.0f) return false;
     if (params.max_force < 0.0f || params.max_force > 10000.0f) return false;
     if (params.max_moment < 0.0f || params.max_moment > 10000.0f) return false;
     if (params.i_bound_force < 0.0f || params.i_bound_force > 1000.0f) return false;
     if (params.d_bound_force < 0.0f || params.d_bound_force > 1000.0f) return false;
     if (params.i_bound_moment < 0.0f || params.i_bound_moment > 1000.0f) return false;
     if (params.d_bound_moment < 0.0f || params.d_bound_moment > 1000.0f) return false;
+    if (params.input_timeout_s <= 0.001f || params.input_timeout_s > 10.0f) return false;
     return true;
 }
