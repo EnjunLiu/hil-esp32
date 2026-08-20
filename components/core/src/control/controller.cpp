@@ -1,9 +1,9 @@
-#include "control/RLPID_controller.hpp"
+#include "control/controller.hpp"
 
 /* 构造函数 
     可选构造项包括：时间步长、积分限、微分限、输出限
 */
-RLPIDController::RLPIDController(float _Delta_t, float _I_bound, float _D_bound, float _output_bound)
+Controller::Controller(float _Delta_t, float _I_bound, float _D_bound, float _output_bound)
     : Delta_t(_IQ(_Delta_t)), state(), next_state(), Phi(), next_Phi(),
       mu(_IQ(1.0), _IQ(0.0), _IQ(0.0),
          _IQ(0.0), _IQ(1.0), _IQ(0.0),
@@ -20,7 +20,7 @@ RLPIDController::RLPIDController(float _Delta_t, float _I_bound, float _D_bound,
 }
 
 /* 计算控制器输出 */
-_iq RLPIDController::output(const _iq& new_error, const _iq& gradsign) {
+_iq Controller::output(const _iq& new_error, const _iq& gradsign) {
     state = next_state;
     Phi = compute_feature(state);
 
@@ -107,7 +107,7 @@ _iq RLPIDController::output(const _iq& new_error, const _iq& gradsign) {
 }
 
 /* 计算特征向量 */
-IQVector<3> RLPIDController::compute_feature(const IQVector<3>& state) const {
+IQVector<3> Controller::compute_feature(const IQVector<3>& state) const {
     IQVector<3> mu0(mu.m00, mu.m01, mu.m02);
     IQVector<3> mu1(mu.m10, mu.m11, mu.m12);
     IQVector<3> mu2(mu.m20, mu.m21, mu.m22);

@@ -5,7 +5,7 @@
 #include "iq_math_extension/iq_matrix3X3.hpp"
 #include "iq_math_extension/iq_scalar.hpp"
 
-struct RLPIDController {
+struct Controller {
     _iq Delta_t;
 
     IQVector<3> state;      // 当前状态
@@ -36,7 +36,7 @@ struct RLPIDController {
     _iq I; // PID I参数
     _iq D; // PID D参数
 
-    RLPIDController(float _Delta_t, float _I_bound, float _D_bound, float _output_bound);
+    Controller(float _Delta_t, float _I_bound, float _D_bound, float _output_bound);
 
     /* 更新控制器并计算控制器输出 */
     _iq output(const _iq& new_error, const _iq& gradsign);
