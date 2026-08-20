@@ -2,7 +2,6 @@
 
 #include "sdkconfig.h"
 #include "driver/uart.h"
-#include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 
 #define UART_TXD CONFIG_MICROROS_UART_TXD
@@ -12,7 +11,6 @@
 
 #define UART_RX_BUFFER_SIZE 1024
 
-static esp32_serial_debug_stats_t g_stats = {0};
 static bool g_driver_owned = false;
 
 static uart_port_t get_uart_port(struct uxrCustomTransport *transport)
@@ -20,23 +18,9 @@ static uart_port_t get_uart_port(struct uxrCustomTransport *transport)
     return *((uart_port_t *)transport->args);
 }
 
-void esp32_serial_get_debug_stats(esp32_serial_debug_stats_t *stats)
-{
-    if (stats != NULL) {
-        g_stats.driver_owned = g_driver_owned;
-        *stats = g_stats;
-    }
-}
-
 bool esp32_serial_open(struct uxrCustomTransport *transport)
 {
-    ++g_stats.open_calls;
-    g_stats.last_open_stage = 0;
-    g_stats.last_esp_error = ESP_OK;
-
     if (transport == NULL || transport->args == NULL) {
-        g_stats.last_open_stage = 1;
-        g_stats.last_esp_error = ESP_ERR_INVALID_ARG;
         return false;
     }
 
@@ -50,10 +34,7 @@ bool esp32_serial_open(struct uxrCustomTransport *transport)
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     };
 
-    esp_err_t ret = uart_param_config(uart_port, &uart_config);
-    if (ret != ESP_OK) {
-        g_stats.last_open_stage = 2;
-        g_stats.last_esp_error = ret;
+    if (uart_param_config(uart_port, &uart_config) != ESP_OK) {
         return false;
     }
 
@@ -62,46 +43,25 @@ bool esp32_serial_open(struct uxrCustomTransport *transport)
     const int rts_pin = UART_RTS < 0 ? UART_PIN_NO_CHANGE : UART_RTS;
     const int cts_pin = UART_CTS < 0 ? UART_PIN_NO_CHANGE : UART_CTS;
 
-    ret = uart_set_pin(uart_port, tx_pin, rx_pin, rts_pin, cts_pin);
-    if (ret != ESP_OK) {
-        g_stats.last_open_stage = 3;
-        g_stats.last_esp_error = ret;
+    if (uart_set_pin(uart_port, tx_pin, rx_pin, rts_pin, cts_pin) != ESP_OK) {
         return false;
     }
 
     if (uart_is_driver_installed(uart_port)) {
-        ++g_stats.driver_preinstalled;
-        g_stats.driver_owned = g_driver_owned;
         return true;
     }
 
-    ret = uart_driver_install(
-        uart_port,
-        UART_RX_BUFFER_SIZE,
-        0,
-        0,
-        NULL,
-        0
-    );
-
-    if (ret != ESP_OK) {
-        g_stats.last_open_stage = 4;
-        g_stats.last_esp_error = ret;
+    if (uart_driver_install(uart_port, UART_RX_BUFFER_SIZE, 0, 0, NULL, 0) != ESP_OK) {
         return false;
     }
 
     g_driver_owned = true;
-    g_stats.driver_owned = true;
-
-    /* 清除驱动安装前可能存在的残留噪声。 */
     uart_flush_input(uart_port);
     return true;
 }
 
 bool esp32_serial_close(struct uxrCustomTransport *transport)
 {
-    ++g_stats.close_calls;
-
     if (transport == NULL || transport->args == NULL) {
         return false;
     }
@@ -113,15 +73,12 @@ bool esp32_serial_close(struct uxrCustomTransport *transport)
         return true;
     }
 
-    const esp_err_t ret = uart_driver_delete(uart_port);
-    if (ret == ESP_OK) {
-        g_driver_owned = false;
-        g_stats.driver_owned = false;
-        return true;
+    if (uart_driver_delete(uart_port) != ESP_OK) {
+        return false;
     }
 
-    g_stats.last_esp_error = ret;
-    return false;
+    g_driver_owned = false;
+    return true;
 }
 
 size_t esp32_serial_write(
@@ -130,14 +87,11 @@ size_t esp32_serial_write(
     size_t len,
     uint8_t *err)
 {
-    ++g_stats.write_calls;
-
     if (err != NULL) {
         *err = 0;
     }
 
     if (transport == NULL || transport->args == NULL || buf == NULL) {
-        g_stats.last_write_result = -1;
         if (err != NULL) {
             *err = 1;
         }
@@ -146,7 +100,6 @@ size_t esp32_serial_write(
 
     const uart_port_t uart_port = get_uart_port(transport);
     const int written = uart_write_bytes(uart_port, buf, len);
-    g_stats.last_write_result = written;
 
     if (written < 0) {
         if (err != NULL) {
@@ -154,8 +107,6 @@ size_t esp32_serial_write(
         }
         return 0;
     }
-
-    g_stats.tx_bytes += (uint32_t)written;
 
     if ((size_t)written != len && err != NULL) {
         *err = 1;
@@ -171,14 +122,11 @@ size_t esp32_serial_read(
     int timeout,
     uint8_t *err)
 {
-    ++g_stats.read_calls;
-
     if (err != NULL) {
         *err = 0;
     }
 
     if (transport == NULL || transport->args == NULL || buf == NULL) {
-        g_stats.last_read_result = -1;
         if (err != NULL) {
             *err = 1;
         }
@@ -192,24 +140,13 @@ size_t esp32_serial_read(
         timeout_ticks = 1;
     }
 
-    const int received = uart_read_bytes(
-        uart_port,
-        buf,
-        len,
-        timeout_ticks
-    );
-
-    g_stats.last_read_result = received;
+    const int received = uart_read_bytes(uart_port, buf, len, timeout_ticks);
 
     if (received < 0) {
         if (err != NULL) {
             *err = 1;
         }
         return 0;
-    }
-
-    if (received > 0) {
-        g_stats.rx_bytes += (uint32_t)received;
     }
 
     return (size_t)received;
