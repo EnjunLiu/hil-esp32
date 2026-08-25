@@ -6,4 +6,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # micro-ROS reads custom message packages from extra_ros_packages/.
 
-project(asv_esp32_firmware)
+project(espapp_esp32_firmware)

@@ -32,11 +32,11 @@ void Controller::configure(float delta_t, float gamma_rl, float lambda_rls, floa
 {
     Delta_t = _IQ(delta_t);
     gamma = _IQ(gamma_rl);
-    lambda_rls = _IQ(lambda_rls);
-    decay = _IQ(decay);
+    this->lambda_rls = _IQ(lambda_rls);
+    this->decay = _IQ(decay);
     I_bound = _IQ(i_bound);
     D_bound = _IQ(d_bound);
-    output_bound = _IQ(output_bound);
+    this->output_bound = _IQ(output_bound);
     W_bound = _IQ(w_bound);
     this->pid_gain_max = _IQ(pid_gain_max);
     this->pid_gain_min = _IQ(pid_gain_min);

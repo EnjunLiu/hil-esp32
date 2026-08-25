@@ -1,6 +1,6 @@
 set(CORE_SRCS
     "src/application/ros_node.cpp"
-    "src/application/asv_app.cpp"
+    "src/application/esp_app.cpp"
     "src/communication/esp32_serial_transport.c"
     "src/control/controller.cpp"
     "src/estimator/estimator.cpp"

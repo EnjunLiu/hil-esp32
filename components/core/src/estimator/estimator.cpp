@@ -7,11 +7,12 @@ Observer::Observer()
     : T(_IQ(0)), v_max(_IQ(0)), e_max(_IQ(0)), Delta_t(_IQ(0)),
       state(_IQ(0)), state_hat(_IQ(0)), v_state_hat(_IQ(0)) {}
 
+// Configure the observer with the time constant, maximum velocity, maximum error, and delta time
 void Observer::configure(float time_constant, float v_max, float e_max, float delta_t)
 {
     T = _IQ(time_constant);
     this->v_max = _IQ(v_max);
-    e_max = _IQ(e_max);
+    this->e_max = _IQ(e_max);
     Delta_t = _IQ(delta_t);
 }
 

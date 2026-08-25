@@ -1,6 +1,6 @@
 /**
  * @file ros_node.cpp
- * @brief micro-ROS 节点 —— ESP32 ASV 固件
+ * @brief micro-ROS 节点 —— ESP32 espapp 固件
  */
 
 #include "application/ros_node.hpp"
@@ -22,7 +22,7 @@
 #include <interfaces/msg/output.h>
 #include <interfaces/msg/input.h>
 
-#include "application/asv_app.hpp"
+#include "application/esp_app.hpp"
 
 #ifndef UROS_MINIMAL_NODE_TEST
 #define UROS_MINIMAL_NODE_TEST 0
@@ -263,12 +263,12 @@ extern "C" void esp_ros_task(void *arg)
                   rclc_subscription_init_default(
                       &input_sub, &node,
                       ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, Input),
-                      "/control/input"));
+                      "/espapp/input"));
     RCCHECK_STAGE("output publisher",
                   rclc_publisher_init_default(
                       &output_pub, &node,
                       ROSIDL_GET_MSG_TYPE_SUPPORT(interfaces, msg, Output),
-                      "/control/output"));
+                      "/espapp/output"));
 
     const rclc_parameter_options_t parameter_options = {
         .notify_changed_over_dds = true,
@@ -300,7 +300,7 @@ extern "C" void esp_ros_task(void *arg)
                   rclc_executor_add_timer(&executor, &step_timer));
 
     ESP_LOGI(UROS_TAG, "FULL NODE READY: /esp32_node");
-    ESP_LOGI(UROS_TAG, "topics: /control/input, /control/output");
+    ESP_LOGI(UROS_TAG, "topics: /espapp/input, /espapp/output");
 
     uint32_t spin_error_count = 0;
     uint32_t ping_ticks = 0;

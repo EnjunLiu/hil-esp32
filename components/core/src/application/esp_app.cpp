@@ -1,14 +1,14 @@
-#include "application/asv_app.hpp"
+#include "application/esp_app.hpp"
 #include <esp_timer.h>
 
-ASVApp g_app;
+EspApp g_app;
 
-ASVApp::ASVApp()
+EspApp::EspApp()
     : guidancelaw_()
     , controller_v_()
     , controller_psi_() {}
 
-void ASVApp::init()
+void EspApp::init()
 {
     input_ = Input{};
     force_ = 0.0f;
@@ -18,16 +18,16 @@ void ASVApp::init()
     input_active_ = false;
 
     params_ = Params{};
-    resetState_();
+    resetState();
 }
 
-void ASVApp::setInput(const Input &input)
+void EspApp::setInput(const Input &input)
 {
     input_ = input;
     last_input_rx_us_ = esp_timer_get_time();
 }
 
-bool ASVApp::applyParams(const Params &params, bool reset_state)
+bool EspApp::applyParams(const Params &params, bool reset_state)
 {
     if (params.version <= params_.version || !validateParams_(params)) {
         return false;
@@ -37,19 +37,19 @@ bool ASVApp::applyParams(const Params &params, bool reset_state)
     syncSubObjectParams_();
 
     if (reset_state) {
-        resetState_();
+        resetState();
     }
 
     return true;
 }
 
-Output ASVApp::step()
+Output EspApp::step()
 {
     const int64_t now_us = esp_timer_get_time();
 
     if (!inputActive_(now_us)) {
         if (input_active_) {
-            resetState_();
+            resetState();
         }
         input_active_ = false;
         return Output{ input_.stamp_us, 0.0f, 0.0f, false };
@@ -57,12 +57,12 @@ Output ASVApp::step()
 
     input_active_ = true;
 
-    const float desired[ASV_OBSERVER_COUNT] = { input_.desired_x, input_.desired_y };
-    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
+    const float desired[ESPAPP_OBSERVER_COUNT] = { input_.desired_x, input_.desired_y };
+    for (int i = 0; i < ESPAPP_OBSERVER_COUNT; ++i) {
         observers_[i].update(_IQ(desired[i]));
     }
-    guidancelaw_.update(observers_[ASV_OBSERVER_X].v_state_hat, observers_[ASV_OBSERVER_Y].v_state_hat,
-                        observers_[ASV_OBSERVER_X].state_hat, observers_[ASV_OBSERVER_Y].state_hat);
+    guidancelaw_.update(observers_[ESPAPP_OBSERVER_X].v_state_hat, observers_[ESPAPP_OBSERVER_Y].v_state_hat,
+                        observers_[ESPAPP_OBSERVER_X].state_hat, observers_[ESPAPP_OBSERVER_Y].state_hat);
 
     const _iq surge_velocity_iq = _IQ(input_.surge_velocity);
     const _iq yaw_rate_iq = _IQ(input_.yaw_rate);
@@ -73,7 +73,8 @@ Output ASVApp::step()
     const _iq gradsign_moment =
         (_IQmpy(moment_iq, yaw_rate_iq) < _IQ(0.0)) ? _IQ(-1.0) : _IQ(1.0);
 
-    force_iq += controller_v_.output(guidancelaw_.desired_velocity, gradsign_force);
+    // Controller::output() returns an absolute saturated command (not a delta).
+    force_iq = controller_v_.output(guidancelaw_.desired_velocity, gradsign_force);
     moment_iq = controller_psi_.output(guidancelaw_.desired_angle, gradsign_moment);
 
     force_ = _IQtoF(force_iq);
@@ -81,7 +82,7 @@ Output ASVApp::step()
     return Output{ input_.stamp_us, force_, moment_, true };
 }
 
-bool ASVApp::inputActive_(int64_t now_us) const
+bool EspApp::inputActive_(int64_t now_us) const
 {
     const int64_t timeout_us = (int64_t)(params_.input_timeout_s * 1000000.0f);
     return input_.valid &&
@@ -89,16 +90,26 @@ bool ASVApp::inputActive_(int64_t now_us) const
            (now_us - last_input_rx_us_) <= timeout_us;
 }
 
-void ASVApp::resetState()
+void EspApp::resetState()
 {
-    resetState_();
+    for (int i = 0; i < ESPAPP_OBSERVER_COUNT; ++i) {
+        observers_[i].resetState();
+    }
+    guidancelaw_.resetState();
+    controller_v_.resetAdaptiveState();
+    controller_psi_.resetAdaptiveState();
+
+    force_ = 0.0f;
+    moment_ = 0.0f;
+
+    syncSubObjectParams_();
 }
 
-void ASVApp::syncSubObjectParams_()
+void EspApp::syncSubObjectParams_()
 {
     const Params &p = params_;
 
-    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
+    for (int i = 0; i < ESPAPP_OBSERVER_COUNT; ++i) {
         observers_[i].configure(p.time_constant, p.v_max, p.e_max, p.delta_t);
     }
     guidancelaw_.configure(p.time_constant, p.delta_t);
@@ -113,22 +124,7 @@ void ASVApp::syncSubObjectParams_()
         p.w_bound, p.pid_gain_max, p.pid_gain_min);
 }
 
-void ASVApp::resetState_()
-{
-    for (int i = 0; i < ASV_OBSERVER_COUNT; ++i) {
-        observers_[i].resetState();
-    }
-    guidancelaw_.resetState();
-    controller_v_.resetAdaptiveState();
-    controller_psi_.resetAdaptiveState();
-
-    force_ = 0.0f;
-    moment_ = 0.0f;
-
-    syncSubObjectParams_();
-}
-
-bool ASVApp::validateParams_(const Params &params) const
+bool EspApp::validateParams_(const Params &params) const
 {
     if (params.time_constant <= 0.001f || params.time_constant > 100.0f) return false;
     if (params.v_max < 0.0f || params.v_max > 100.0f) return false;

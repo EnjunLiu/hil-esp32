@@ -1,11 +1,11 @@
-# ASV Controller Firmware
+# ESP App Firmware
 
-基于 ESP-IDF 编译的 ASV 控制器固件。
+基于 ESP-IDF 编译的 espapp 控制器固件。
 
 ## 功能简介
 
-- 接收 ASV 坐标系下的期望位移，输出力和力矩
-- 基于 micro-ROS 实现与上位机通信
+- 接收期望位移，输出力和力矩
+- 基于 micro-ROS 实现与上位机通信（话题：`/espapp/input`、`/espapp/output`）
 
 ## 实现细节
 
