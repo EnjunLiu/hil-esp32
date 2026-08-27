@@ -68,7 +68,7 @@ bool esp32_serial_close(struct uxrCustomTransport *transport)
 
     const uart_port_t uart_port = get_uart_port(transport);
 
-    /* 不删除其他模块预先安装的 UART 驱动。 */
+    /* 不删除其他模块预先安装的 UART 驱动 */
     if (!g_driver_owned) {
         return true;
     }

@@ -1,8 +1,3 @@
-/**
- * @file ros_node.cpp
- * @brief micro-ROS 节点 —— ESP32 espapp 固件
- */
-
 #include "application/ros_node.hpp"
 
 #include <stdio.h>
