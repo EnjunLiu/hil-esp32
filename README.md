@@ -1,11 +1,11 @@
 # 面向 ASV 仿真的硬件在环实验平台 - ESP32端
 
-基于 ESP-IDF 编译的 espapp 固件。
+基于 ESP-IDF 编译的 espapp 固件，用于 ASV 的底层控制
 
 ## 功能接口
 
 - 按照固定的控制频率，接收 ASV 在 BodyFrame 下的二维期望位移，输出力和力矩
-- 基于 micro-ROS 实现与上位机 Jetson Orin Nano 的通信（订阅话题：`/espapp/input`， 发布话题： `/espapp/output`）
+- 基于 micro-ROS 实现与上位机 Jetson Orin Nano 上的 micro-ROS-agent 进行通信（订阅话题：`/espapp/input`， 发布话题： `/espapp/output`）
 - 输入：二维期望位移、 ASV 自身纵向速度、 ASV 自身角速度（后两者在实际中可通过 IMU 传感器获得）
 - 输出：力、力矩
 
